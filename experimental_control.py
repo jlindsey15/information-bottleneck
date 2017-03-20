@@ -2,17 +2,20 @@ from IB import *
 from data_generation import *
 import os
 
-def test_IB(pxy,compact=1):   
+def test_IB(pxy, Xdata, compact=1):
   
     # set up fit param
-    fit_param = pd.DataFrame(data={'alpha': [0.,1.]})
+    #fit_param = pd.DataFrame(data={'alpha': [0.,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.]})
+    fit_param = pd.DataFrame(data={'alpha': [0., 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]})
+    #fit_param = pd.DataFrame(data={'alpha': [0.5]})
+    
     
     # do IB
     if compact>1:
         metrics_stepwise, distributions_stepwise,\
            metrics_converged, distributions_converged,\
            metrics_stepwise_allreps, distributions_stepwise_allreps,\
-           metrics_converged_allreps, distributions_converged_allreps  = IB(pxy,fit_param,compact)
+           metrics_converged_allreps, distributions_converged_allreps  = IB(pxy,fit_param, Xdata, compact)
         #metrics_converged, distributions_converged = clamp_IB(metrics_converged,distributions_converged,pxy)
         return metrics_stepwise, distributions_stepwise,\
                metrics_converged, distributions_converged,\
@@ -22,7 +25,7 @@ def test_IB(pxy,compact=1):
         metrics_stepwise,\
            metrics_converged, distributions_converged,\
            metrics_stepwise_allreps,\
-           metrics_converged_allreps, distributions_converged_allreps  = IB(pxy,fit_param,compact)
+           metrics_converged_allreps, distributions_converged_allreps  = IB(pxy,fit_param, Xdata, compact)
         #metrics_converged, distributions_converged = clamp_IB(metrics_converged,distributions_converged,pxy)
         return metrics_stepwise,\
                metrics_converged, distributions_converged,\
@@ -32,7 +35,7 @@ def test_IB(pxy,compact=1):
         metrics_stepwise,\
            metrics_converged,\
            metrics_stepwise_allreps,\
-           metrics_converged_allreps  = IB(pxy,fit_param,compact)
+           metrics_converged_allreps  = IB(pxy,fit_param, Xdata, compact)
         return metrics_stepwise,\
                metrics_converged,\
                metrics_stepwise_allreps,\
@@ -331,7 +334,7 @@ def run_experiments(data_set="",compact=2,exp_name="",x=""):
             metrics_stepwise, distributions_stepwise,\
                metrics_converged, distributions_converged,\
                metrics_stepwise_allreps, distributions_stepwise_allreps,\
-               metrics_converged_allreps, distributions_converged_allreps = test_IB(pxy,compact)
+               metrics_converged_allreps, distributions_converged_allreps = test_IB(pxy,Xdata, compact)
             metrics_converged.to_csv(results_path+'metrics_converged.csv')
             metrics_stepwise.to_csv(results_path+'metrics_stepwise.csv')
             distributions_converged.to_pickle(results_path+'distributions_converged.pkl')
@@ -339,7 +342,7 @@ def run_experiments(data_set="",compact=2,exp_name="",x=""):
             metrics_stepwise,\
                metrics_converged, distributions_converged,\
                metrics_stepwise_allreps,\
-               metrics_converged_allreps, distributions_converged_allreps = test_IB(pxy,compact)
+               metrics_converged_allreps, distributions_converged_allreps = test_IB(pxy,Xdata, compact)
             metrics_converged.to_csv(results_path+'metrics_converged.csv')
             metrics_stepwise.to_csv(results_path+'metrics_stepwise.csv')
             distributions_converged.to_pickle(results_path+'distributions_converged.pkl')

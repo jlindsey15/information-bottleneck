@@ -257,33 +257,37 @@ def plot_pxy(exp_name):
     return 0
     
 def gen_geometric_pxy():
-        
-    # set all parameters    
-    mu1 = np.array([0,0])
+    #THIS IS THE THING TO CHANGE
+    r = 0.3
+    # set all parameters
+    mu1 = np.array([0,r])
     sig1 = 1
-    mu2 = np.array([8,3])
+    mu2 = np.array([0, -r])
     sig2 = 1
-    mu3 = np.array([0,10])
+    mu3 = np.array([r, 0])
     sig3 = 1
-    samp_per_comp = 30
+    mu4 = np.array([-r, 0])
+    sig4 = 1
+    samp_per_comp = 25
     groups = np.array([0]*samp_per_comp+
                         [1]*samp_per_comp+
-                        [2]*samp_per_comp)
+                        [2]*samp_per_comp + [3]*samp_per_comp)
     nbins_y1 = 50 # number of bins in 1st dimension
     nbins_y2 = 50
     s = 1 # spatial scale of gaussian smoothing
     pad = 2*s # max distance from data points for bins
     
     # generate coordinates of data points
-    X = int(3*samp_per_comp)
+    X = int(4*samp_per_comp)
     Xdata = np.r_[sig1*np.random.randn(samp_per_comp,2)+mu1,
                    sig2*np.random.randn(samp_per_comp,2)+mu2,
-                   sig3*np.random.randn(samp_per_comp,2)+mu3]
+                   sig3*np.random.randn(samp_per_comp,2)+mu3,
+                  sig4*np.random.randn(samp_per_comp,2)+mu4]
     X = Xdata.shape[0]
     
     # plot coordinates
     plt.scatter(Xdata[:,0],Xdata[:,1])
-    plt.show()
+    #plt.show()
     
     # generate bins and construct gaussian-smoothed p(y|x)
     Y = int(nbins_y1*nbins_y2)
@@ -319,6 +323,7 @@ def gen_geometric_pxy():
     # construct p(x,y)
     px = (1/X)*np.ones(X)    
     pxy = np.multiply(np.tile(px,(Y,1)),py_x).T
+
     
     # plot p(x,y)
     plt.figure()
@@ -329,5 +334,6 @@ def gen_geometric_pxy():
     # calc and display I(x,y)
     pxy2, px2, py_x2, hx, hy, hy_x, ixy, X2, Y2, zx, zy = process_pxy(pxy,0)
     print("I(X;Y) = %.3f" % ixy)
-        
+    
+    
     return pxy, Xdata, groups

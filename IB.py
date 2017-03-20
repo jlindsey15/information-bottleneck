@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import time
 import math
+from scipy.cluster.vq import vq, kmeans, kmeans2, whiten
 vlog = np.vectorize(math.log)
 vexp = np.vectorize(math.exp)
 
@@ -72,6 +73,7 @@ def entropy(P):
         return H
 
 def process_pxy(pxy,verbose=1):
+
     """Helper function for IB that preprocesses p(x,y) and computes metrics."""
     if pxy.dtype!='float':
         pxy = pxy.astype(float)
@@ -268,7 +270,7 @@ def calc_IB_metrics(qt_x,qt,qy_t,px,hy,alpha,beta):
     L = ht-alpha*ht_x-beta*iyt
     return ht, hy_t, iyt, ht_x, ixt, L 
 
-def IB_single(pxy,beta,alpha,Tmax,p0,ctol_abs,ctol_rel,ptol,zeroLtol,clamp,compact,verbose):
+def IB_single(pxy,beta,alpha,Tmax,p0,ctol_abs,ctol_rel,ptol,zeroLtol,clamp,compact,verbose, Xdata):
     """Performs the generalized Information Bottleneck on the joint p(x,y).
     
     Note: fixed distributions denoted by p; optimized ones by q.
@@ -316,6 +318,7 @@ def IB_single(pxy,beta,alpha,Tmax,p0,ctol_abs,ctol_rel,ptol,zeroLtol,clamp,compa
         step_time -> conv_time = time to run all steps (in s)
         step -> conv_steps = number of steps to converge
         conv_condition = string indicating reason for convergence"""
+    
     
     verify_inputs(pxy,beta,alpha,Tmax,p0,ctol_abs,ctol_rel,ptol,zeroLtol,clamp,compact,verbose)
     
@@ -589,7 +592,7 @@ def IB_single(pxy,beta,alpha,Tmax,p0,ctol_abs,ctol_rel,ptol,zeroLtol,clamp,compa
         distributions_stepwise['zeroLtol'] = zeroLtol
     
     # optional clamping step (doesn't apply to DIB)
-    if (alpha>0) and clamp:
+    if (alpha>=0) and clamp:
         
         start_time = time.time()
     
@@ -603,22 +606,81 @@ def IB_single(pxy,beta,alpha,Tmax,p0,ctol_abs,ctol_rel,ptol,zeroLtol,clamp,compa
                     % (alpha,beta,Tmax,p0,ctol_abs,ctol_rel,ptol))
             print('**************************************************************************************************')
         
+        
+        clusterOfPoint = {}
+        pointsInCluster = {}
+        centroidOfCluster = {}
         # STEP 1: CLAMP Q(T|X)
         for x in range(X):
             tstar = np.argmax(qt_x[:,x])
             qt_x[:,x] = 0
             qt_x[tstar,x] = 1
+            clusterOfPoint[x] = tstar
+            if tstar not in pointsInCluster:
+                pointsInCluster[tstar] = []
+            pointsInCluster[tstar].append(x)
             del tstar
         del x
+
+
+        #print("sartRTEA")
+
+        #print(len(pointsInCluster))
+        realkmeanscentroids, realkmeansassignments = kmeans2(Xdata,len(pointsInCluster))
+        '''
+        qtKMEANS_x = np.zeros((len(pointsInCluster), len(range(X))))
+
+        qtKMEANS = np.zeros((len(pointsInCluster)))
+        for thisCluster in pointsInCluster:
+            qtKMEANS[thisCluster] = (float)(thisCluster.size) / len(clusterOfPoint)
+
+        for x in range(X):
+            qtKMEANS_x[:,x] = 0
+            qtKMEANS_x[realkmeansassignments[x],x] = 1
+        del x
+        '''
+
+        for t in pointsInCluster:
+            centroidX = 0.0
+            centroidY = 0.0
+            for point in pointsInCluster[t]:
+                point = Xdata[point]
+                centroidX += point[0]
+                centroidY += point[1]
+            centroidX /= len(pointsInCluster[t])
+            centroidY /= len(pointsInCluster[t])
+            centroidOfCluster[t] = [centroidX, centroidY]
+
+
+        k_means_loss = 0
+        real_k_means_loss = 0
+        for thing in range(len(Xdata)):
+            xVal = Xdata[thing]
+            x = xVal[0]
+            y = xVal[1]
+            kmeansCentroid = realkmeanscentroids[realkmeansassignments[thing]]
+            cluster = clusterOfPoint[thing]
+            centroid = centroidOfCluster[cluster]
+            distanceSquared = (x - centroid[0])**2 + (y - centroid[1])**2
+            kmeansDistanceSquared = (x - kmeansCentroid[0])**2 + (y - kmeansCentroid[1])**2
+            real_k_means_loss += kmeansDistanceSquared
+            k_means_loss += distanceSquared
+        k_means_loss /= len(Xdata)
+        real_k_means_loss /= len(Xdata)
+
         
         # STEP 2: UPDATE Q(T)
         qt_x,qt,T = qt_step(qt_x,px,ptol,verbose)
+
         
         # STEP 3: UPDATE Q(Y|T)
         qy_t = qy_t_step(qt_x,qt,px,py_x)
+
+        #qyKMEANS_t = qy_t_step(qtKMEANS_x, qtKMEANS, px, py_x)
         
         # calculate and print metrics
         ht, hy_t, iyt, ht_x, ixt, L = calc_IB_metrics(qt_x,qt,qy_t,px,hy,alpha,beta)
+        #htKMEANS, hyKMEANS_t, iytKMEANS, htKMEANS_x, ixtKMEANS, LKMEANS = calc_IB_metrics(qtKMEANS_x,qtKMEANS,qyKMEANS_t,px,hy,alpha,beta)
         if verbose>0:
             print('***** unclamped fit *****')
             print('I(X,T) = %.6f, H(T) = %.6f, H(X) = %.6f, I(Y,T) = %.6f, I(X,Y) = %.6f, L = %.6f' % (ixt_old,ht_old,hx,iyt_old,ixy,L_old))
@@ -635,7 +697,7 @@ def IB_single(pxy,beta,alpha,Tmax,p0,ctol_abs,ctol_rel,ptol,zeroLtol,clamp,compa
                         'beta': beta, 'alpha': alpha, 'p0': p0, 'zeroLtol': zeroLtol,
                         'ctol_abs': ctol_abs, 'ctol_rel': ctol_rel,
                         'ptol': ptol, 'conv_condition': conv_condition,
-                        'clamp': True},
+                        'clamp': True, 'kmeans:': k_means_loss, 'numclusters': len(pointsInCluster), 'IBScore': ixt - beta*iyt, 'DIBScore': ht - alpha*ht_x - beta*iyt, 'real k means': real_k_means_loss},
                         index=[1]))
         if compact>0:
             distributions_converged = distributions_converged.append(pd.DataFrame(data={
@@ -772,7 +834,7 @@ def set_param(fit_param,param_name,def_val):
         param = def_val
     return param
 
-def IB(pxy,fit_param,compact=1,verbose=2):
+def IB(pxy,fit_param, Xdata, compact=1,verbose=2):
     """Performs many generalized IB fits to a single p(x,y).
     
     One fit is performed for each row of input dataframe fit_param. Columns
@@ -814,8 +876,10 @@ def IB(pxy,fit_param,compact=1,verbose=2):
              2: also save stepwise distributions)"""
     
     # set defaults
-    def_betas = np.array([.1,1,2,3,4,5,7,9,10])
-    def_beta_search = True
+    #def_betas = np.array([2**(-3), 2**(-2), 2**(-1), 2**(-0*0+0), 2**(1), 2**(2), 2**(3)])
+    def_betas = np.array([0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0])
+
+    def_beta_search = False
     def_Tmax = math.inf
     def_p0 = .75
     def_ctol_abs = 10**-3
@@ -956,17 +1020,17 @@ def IB(pxy,fit_param,compact=1,verbose=2):
                     this_metrics_stepwise, this_distributions_stepwise, \
                     this_metrics_converged, this_distributions_converged = \
                     IB_single(pxy,this_beta,this_alpha,this_Tmax,
-                              this_p0,this_ctol_abs,this_ctol_rel,this_ptol,this_zeroLtol,this_clamp,compact,verbose)
+                              this_p0,this_ctol_abs,this_ctol_rel,this_ptol,this_zeroLtol,this_clamp,compact,verbose, Xdata)
                 elif compact>0:
                     this_metrics_stepwise, \
                     this_metrics_converged, this_distributions_converged = \
                     IB_single(pxy,this_beta,this_alpha,this_Tmax,
-                              this_p0,this_ctol_abs,this_ctol_rel,this_ptol,this_zeroLtol,this_clamp,compact,verbose)
+                              this_p0,this_ctol_abs,this_ctol_rel,this_ptol,this_zeroLtol,this_clamp,compact,verbose, Xdata)
                 else:
                     this_metrics_stepwise, \
                     this_metrics_converged = \
                     IB_single(pxy,this_beta,this_alpha,this_Tmax,
-                              this_p0,this_ctol_abs,this_ctol_rel,this_ptol,this_zeroLtol,this_clamp,compact,verbose)
+                              this_p0,this_ctol_abs,this_ctol_rel,this_ptol,this_zeroLtol,this_clamp,compact,verbose, Xdata)
                 # add repeat labels
                 this_metrics_stepwise['repeat'] = repeat
                 this_metrics_stepwise['repeats'] = this_repeats
